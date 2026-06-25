@@ -3,6 +3,7 @@ import std;
 import Geant4.Externals;
 import BetaSimLib.Commands.CommandBuilder;
 import BetaSimLib.Detectors.DetectorManager;
+import BetaSimLib.Detectors.StartDetector;
 namespace BetaSimLib::Runner {
 
 class UserActionInitialization : Geant4::G4VUserActionInitialization {
@@ -85,9 +86,13 @@ private:
 
     runManager = std::make_unique<Geant4::G4MTRunManager>();
     //expMessenger = std::make_unique<BaseExperimentMessenger>();
+
     detManager = std::make_unique<BetaSimLib::Detectors::DetectorManager>();
+    detManager->SetDetector(std::make_unique<BetaSimLib::Detectors::StartDetector>());
 
     runManager->SetNumberOfThreads(8);
+
+    runManager->SetUserInitialization(detManager->GetCurrentDetectorPointer());
 
     //     detManager->SetDetector(std::make_unique<StartDetector>());
 
@@ -116,6 +121,8 @@ private:
   std::unique_ptr<Geant4::G4MTRunManager> runManager;
   std::unique_ptr<Geant4::G4VisExecutive> visManager;
   Geant4::G4UImanager *uiManager = nullptr;
+
+  std::unique_ptr<BetaSimLib::Detectors::DetectorManager> detManager;
 
 #pragma endregion
 };
