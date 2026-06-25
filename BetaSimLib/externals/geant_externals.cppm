@@ -33,12 +33,14 @@ module;
 #include "G4VUserActionInitialization.hh"
 #include "G4VUserDetectorConstruction.hh"
 #include "G4VPhysicalVolume.hh"
+#include "G4NistManager.hh"
 
 
 
 #include "CLHEP/Units/SystemOfUnits.h"
 export module Geant4.Externals;
 export namespace Geant4{
+    using ::G4NistManager;
     using ::G4VPhysicalVolume;
     using ::G4VUserDetectorConstruction;
     using ::G4VUserActionInitialization;

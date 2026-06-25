@@ -2,6 +2,7 @@
 import std;
 import Geant4.Externals;
 import BetaSimLib.Commands.CommandBuilder;
+import BetaSimLib.Detectors.DetectorManager;
 namespace BetaSimLib::Runner {
 
 class UserActionInitialization : Geant4::G4VUserActionInitialization {
@@ -84,7 +85,7 @@ private:
 
     runManager = std::make_unique<Geant4::G4MTRunManager>();
     //expMessenger = std::make_unique<BaseExperimentMessenger>();
-    detManager = std::make_unique<DetectorManager>();
+    detManager = std::make_unique<BetaSimLib::Detectors::DetectorManager>();
 
     runManager->SetNumberOfThreads(8);
 

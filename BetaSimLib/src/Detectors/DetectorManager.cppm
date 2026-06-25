@@ -1,4 +1,4 @@
-export module BetaSim.Detectors.DetectorManger;
+export module BetaSimLib.Detectors.DetectorManager;
 import std;
 import BetaSimLib.Detectors.DetectorWrapper;
 import BetaSimLib.Concepts.Detectors;

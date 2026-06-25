@@ -10,12 +10,9 @@ export namespace BetaSimLib::Detectors {
 #pragma region Constructor
 
     public:
-        StartDetector() {
+        StartDetector() {}
 
-        }
-
-        ~StartDetector() override
-{};
+        ~StartDetector() override{};
 
         StartDetector(const StartDetector &) = delete;
         StartDetector &operator=(const StartDetector &) = delete;
@@ -27,7 +24,7 @@ export namespace BetaSimLib::Detectors {
 #pragma region Methods
     public:
         Geant4::G4VPhysicalVolume *Construct() override {
-            auto* nist = G4NistManager::Instance();
+            auto* nist = Geant4::G4NistManager::Instance();
 
             auto* worldMat = nist->FindOrBuildMaterial("G4_Galactic");
 
