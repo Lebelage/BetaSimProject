@@ -3,7 +3,6 @@ export module BetaSimLib.Models.Experiment;
 
 import std;
 import Geant4.Externals;
-
 export namespace BetaSimLib::Models
 {
     // ---------------------------------------------------------

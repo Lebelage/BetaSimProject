@@ -1,0 +1,85 @@
+# ============================================================
+# Experiment type
+# ============================================================
+
+/exp/reset
+/exp/type stack
+
+
+# ============================================================
+# World
+# Заполняет:
+#   BaseExperimentConfig::worldMaterial
+#   BaseExperimentConfig::worldSize
+# ============================================================
+
+/exp/world/material G4_Galactic
+/exp/world/size 1 m
+
+
+# ============================================================
+# Materials
+# Заполняет:
+#   BaseExperimentConfig::matBuild
+#   BaseExperimentConfig::matBuildX
+# ============================================================
+
+# Пример обычного материала через массовые доли
+#/exp/material/create MyScintillator 1.032 g/cm3
+#/exp/material/addMassFraction MyScintillator C 0.915
+#/exp/material/addMassFraction MyScintillator H 0.085
+#/exp/material/finalize MyScintillator
+
+# Пример материала через x-параметр
+# Например Al_xGa_{1-x}N, x = 0.3
+/exp/material/createx AlGaN 0.3
+
+
+# ============================================================
+# Detector layer block
+# Заполняет:
+#   BaseExperimentConfig::detector
+# ============================================================
+
+/exp/DetectorLayer/start
+/exp/stack/xy 10 cm 10 cm
+/exp/layer/add G4_Ti 500 um
+/exp/DetectorLayer/end
+
+
+# ============================================================
+# Source layer block
+# Заполняет:
+#   BaseExperimentConfig::sourceLayer
+# ============================================================
+
+#/exp/SourceLayer/start
+#/exp/SourceLayerType/ stack
+#/exp/stack/xy 5 cm 5 cm
+#/exp/layer/add MyScintillator 100 um
+#/exp/SourceLayer/end
+
+
+# ============================================================
+# Source physics
+# Заполняет:
+#   BaseExperimentConfig::sourceType
+#   BaseExperimentConfig::gun
+# ============================================================
+
+/exp/source/type gun
+/exp/source/gun/particle e-
+/exp/source/gun/energy 1 MeV
+/exp/source/gun/pos 0 0 -10 cm
+/exp/source/gun/dir 0 0 1
+
+
+# ============================================================
+# Apply
+# Финальный сигнал: конфиг полностью заполнен
+# ============================================================
+
+/exp/apply
+
+/vis/disable
+/tracking/storeTrajectory 0

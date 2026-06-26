@@ -45,3 +45,15 @@ target_link_libraries(Application
     PRIVATE
         BetaSimLib
 )
+
+
+# копирование после успешной сборки
+add_custom_command(TARGET Application POST_BUILD
+        # Используем встроенную в CMake кроссплатформенную утилиту для копирования папок
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        # Откуда копируем: полный путь до папки macroses в библиотеке
+        "${CMAKE_SOURCE_DIR}/BetaSimLib/macroses"
+        # Куда копируем: создаем папку AppConfigs рядом с собранным .exe / бинарником
+        "$<TARGET_FILE_DIR:Application>/AppConfigs"
+        COMMENT "Копирование макросов Geant4 в директорию сборки..."
+)

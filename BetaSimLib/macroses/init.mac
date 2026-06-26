@@ -1,0 +1,7 @@
+/control/verbose 1
+/run/verbose 1
+/event/verbose 0
+/tracking/verbose 0
+
+/vis/open OGL 800x800-0+0
+/vis/viewer/set/style surface

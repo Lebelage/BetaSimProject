@@ -8,6 +8,7 @@ import Geant4.Externals;
 import BetaSimLib.Commands.CommandBuilder;
 import BetaSimLib.Commands.CommandManager;
 import BetaSimLib.Models.Experiment;
+import BetaSimLib.EventDispatcher;
 
 export namespace BetaSimLib::Messenger
 {
@@ -102,6 +103,12 @@ export namespace BetaSimLib::Messenger
           Geant4::G4Exception("Messenger", "ApplyError", Geant4::G4ExceptionSeverity::JustWarning,
                               "Calling /exp/apply while a block is still open. Proceeding anyway, but data might be incomplete.");
         }
+        auto cfg = std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig>(std::move(fCfg));
+
+        EventDispatcher::EventDispatcher::GetExperimentConfigReadyEvent().Invoke(cfg);
+
+        fCfg = std::make_unique<BetaSimLib::Models::BaseExperimentConfig>();
+        fState = ParseState::Global;
         //commandManager->ApplyCommand(std::move(fCfg));
         return;
       }

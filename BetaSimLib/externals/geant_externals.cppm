@@ -34,9 +34,13 @@ module;
 #include "G4VUserDetectorConstruction.hh"
 #include "G4VPhysicalVolume.hh"
 #include "G4NistManager.hh"
-
-
-
+#include "G4Step.hh"
+#include "G4UserRunAction.hh"
+#include "G4Run.hh"
+#include "G4Event.hh"
+#include "G4VUserPrimaryGeneratorAction.hh"
+#include "G4ParticleGun.hh"
+#include "G4ParticleTable.hh"
 
 #include "CLHEP/Units/SystemOfUnits.h"
 export module Geant4.Externals;
@@ -55,6 +59,11 @@ export namespace Geant4{
     using ::G4StepLimiterPhysics;
     using ::G4DecayPhysics;
     using ::G4RadioactiveDecayPhysics;
+    using ::G4Event;
+    using ::G4VUserPrimaryGeneratorAction;
+    using ::G4ParticleGun;
+    using ::G4ParticleTable;
+
 
     using ::G4UImessenger;
     using ::G4UIcmdWith3VectorAndUnit;
@@ -77,10 +86,11 @@ export namespace Geant4{
     using ::G4Element;
     using ::G4double;
     using ::G4int;
+    using ::G4Run;
 
 
+    using ::G4UserRunAction;
     using ::G4ThreeVector;
-
     using ::G4VUserDetectorConstruction;
 
     inline constexpr G4double perCent = CLHEP::perCent;
