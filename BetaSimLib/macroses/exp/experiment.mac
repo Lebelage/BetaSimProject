@@ -29,11 +29,11 @@
 # Строится от Z = 0 в сторону +Z
 # ============================================================
 
-/exp/SourceLayer/start
-/exp/SourceLayer/type stack
-/exp/stack/xy 5 mm 5 mm
-/exp/layer/add G4_Ni 10 um
-/exp/SourceLayer/end
+#/exp/SourceLayer/start
+#/exp/SourceLayer/type stack
+#/exp/stack/xy 5 mm 5 mm
+#/exp/layer/add G4_Ni 10 um
+#/exp/SourceLayer/end
 
 
 # ============================================================
@@ -43,9 +43,9 @@
 
 /exp/DetectorLayer/start
 /exp/stack/xy 5 mm 5 mm
+/exp/layer/add GaN 200 um
 /exp/layer/add GaN 500 um
-/exp/layer/add GaN 500 um
-/exp/layer/add GaN 500 um
+/exp/layer/add GaN 800 um
 /exp/DetectorLayer/end
 
 
@@ -54,10 +54,16 @@
 # Ni: Z = 28, A = 63
 # ============================================================
 
-/exp/source/type decay
-/exp/source/decay/ion 28 63
-/exp/source/decay/excitation 0 keV
-/exp/source/decay/charge 0
+#/exp/source/type decay
+#/exp/source/decay/ion 28 63
+#/exp/source/decay/excitation 0 keV
+#/exp/source/decay/charge 0
+
+/exp/source/type gun
+/exp/source/gun/particle e-
+/exp/source/gun/energy 10 keV
+/exp/source/gun/pos 0 0 2 mm
+/exp/source/gun/dir 0 0 -1
 
 
 # ============================================================

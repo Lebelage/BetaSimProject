@@ -2,162 +2,218 @@
 // Created by Sonora on 17.06.2026.
 //
 export module BetaSimLib.Layers.DetectorLayerBuilder;
+
 import std;
 import Geant4.Externals;
+
 import BetaSimLib.Materials.ExtendedMaterialService;
 import BetaSimLib.Models.Experiment;
+
 export namespace BetaSimLib::Layers {
-    // -----------------------------------------------------------------
-    // БАЗОВЫЙ КЛАСС ДЛЯ ОБЩИХ МЕТОДОВ
-    // -----------------------------------------------------------------
-    class BaseLayerBuilder {
-    protected:
-        // Безопасное извлечение G4Material из вашего сервиса
-        Geant4::G4Material* GetMaterial(const std::string& name) const {
-            auto optExtMat = BetaSimLib::Materials::ExtendedMaterialService::Instance().Get(name);
-            if (!optExtMat.has_value() || optExtMat.value() == nullptr) {
-                Geant4::G4Exception("BaseLayerBuilder", "MatNotFound", Geant4::G4ExceptionSeverity::FatalException,
-                                    ("Material not found in service: " + name).c_str());
-            }
 
-            return optExtMat.value()->GetG4Material();
+class BaseLayerBuilder {
+protected:
+    Geant4::G4Material* GetMaterial(const std::string& name) const {
+        if (auto* existing = Geant4::G4Material::GetMaterial(name, false)) {
+            return existing;
         }
-    };
 
-    // -----------------------------------------------------------------
-    // БИЛДЕР ДЕТЕКТОРА (Строится вдоль оси -Z)
-    // -----------------------------------------------------------------
-    class DetectorLayerBuilder : public BaseLayerBuilder {
-    public:
-        void Build(const BetaSimLib::Models::DetectorConfig& config, Geant4::G4LogicalVolume* motherVolume) const
-        {
-            if (config.layers.empty()) return;
-
-            double currentZ = 0.0; // Старт из 0 в минус
-            double halfX = config.stackX / 2.0;
-            double halfY = config.stackY / 2.0;
-
-            int layerIndex = 0;
-            for (const auto& layer : config.layers) {
-                double halfZ = layer.thickness / 2.0;
-
-                currentZ -= halfZ;
-
-                std::string solidName = "DetLayer_Solid_" + std::to_string(layerIndex);
-                auto* solid = new Geant4::G4Box(solidName, halfX, halfY, halfZ);
-
-                // Логика
-                std::string logicName = "DetLayer_Logic_" + std::to_string(layerIndex);
-                auto* logic = new Geant4::G4LogicalVolume(solid, GetMaterial(layer.material), logicName);
-
-                // Физика (Размещение)
-                std::string physName = "DetLayer_Phys_" + std::to_string(layerIndex);
-                new Geant4::G4PVPlacement(nullptr,
-                                          Geant4::G4ThreeVector(0, 0, currentZ),
-                                          logic, physName, motherVolume, false, layerIndex, true);
-                
-                currentZ -= halfZ;
-                layerIndex++;
-            }
+        if (auto* nistMaterial =
+                Geant4::G4NistManager::Instance()->FindOrBuildMaterial(name, false)) {
+            return nistMaterial;
         }
-    };
 
-    // -----------------------------------------------------------------
-    // БИЛДЕР ИСТОЧНИКА (Строится вдоль оси +Z)
-    // -----------------------------------------------------------------
-    class SourceLayerBuilder : public BaseLayerBuilder {
-    public:
-        void Build(const BetaSimLib::Models::SourceLayerConfig& config, Geant4::G4LogicalVolume* motherVolume) const
-        {
-            if (config.layers.empty()) return;
+        auto optExtMat =
+            BetaSimLib::Materials::ExtendedMaterialService::Instance().Get(name);
 
-            if (config.type == "wrapped_stack") {
-                BuildWrappedStack(config, motherVolume);
-            } else {
-                BuildNormalStack(config, motherVolume);
+        if (optExtMat.has_value() && optExtMat.value() != nullptr) {
+            auto* material = optExtMat.value()->GetG4Material();
+
+            if (material != nullptr) {
+                return material;
             }
         }
 
-    private:
-        // Обычный стек: строится от 0 в сторону +Z
-        void BuildNormalStack(const BetaSimLib::Models::SourceLayerConfig& config, Geant4::G4LogicalVolume* motherVolume) const
-        {
-            double currentZ = 0.0;
-            double halfX = config.stackX / 2.0;
-            double halfY = config.stackY / 2.0;
+        Geant4::G4Exception(
+            "BaseLayerBuilder",
+            "MatNotFound",
+            Geant4::G4ExceptionSeverity::FatalException,
+            ("Material not found: " + name).c_str()
+        );
 
-            int layerIndex = 0;
-            for (const auto& layer : config.layers) {
-                double halfZ = layer.thickness / 2.0;
+        return nullptr;
+    }
+};
 
-                currentZ += halfZ; // Сдвиг в центр слоя по оси +Z
+// -----------------------------------------------------------------
+// ДЕТЕКТОРНЫЕ СЛОИ
+// Строятся вдоль -Z.
+// Только эти logical volumes будут sensitive.
+// -----------------------------------------------------------------
+class DetectorLayerBuilder : public BaseLayerBuilder {
+public:
+    std::vector<Geant4::G4LogicalVolume*> Build(
+        const BetaSimLib::Models::DetectorConfig& config,
+        Geant4::G4LogicalVolume* motherVolume
+    ) const {
+        std::vector<Geant4::G4LogicalVolume*> detectorLogicalVolumes;
 
-                auto* solid = new Geant4::G4Box("SrcLayer_Solid_" + std::to_string(layerIndex),
-                                                halfX, halfY, halfZ);
-                auto* logic = new Geant4::G4LogicalVolume(solid, GetMaterial(layer.material),
-                                                          "SrcLayer_Logic_" + std::to_string(layerIndex));
-
-                new Geant4::G4PVPlacement(nullptr, Geant4::G4ThreeVector(0, 0, currentZ),
-                                          logic, "SrcLayer_Phys_" + std::to_string(layerIndex),
-                                          motherVolume, false, layerIndex, true);
-
-                currentZ += halfZ; // На верхнюю границу
-                layerIndex++;
-            }
+        if (config.layers.empty()) {
+            return detectorLogicalVolumes;
         }
 
-        void BuildWrappedStack(const BetaSimLib::Models::SourceLayerConfig& config, Geant4::G4LogicalVolume* motherVolume) const
-        {
-            // double innerZTotal = 0.0;
-            // for (const auto& layer : config.layers) {
-            //     innerZTotal += layer.thickness;
-            // }
-            
-            // double t = config.wrapperThickness;
-            // double outerX = config.stackX + 2.0 * t;
-            // double outerY = config.stackY + 2.0 * t;
-            // double outerZ = innerZTotal + 2.0 * t;
+        if (!motherVolume) {
+            Geant4::G4Exception(
+                "DetectorLayerBuilder",
+                "NullMotherVolume",
+                Geant4::G4ExceptionSeverity::FatalException,
+                "Mother volume is null."
+            );
 
-            // // 3. Создаем оболочку
-            // auto* wrapperSolid = new Geant4::G4Box("SrcWrapper_Solid", outerX / 2.0, outerY / 2.0, outerZ / 2.0);
-            // auto* wrapperLogic = new Geant4::G4LogicalVolume(wrapperSolid,
-            //                                                  GetMaterial(config.wrapperMaterial),
-            //                                                  "SrcWrapper_Logic");
-
-            // // Оболочка размещается в Мире. Нижняя стенка должна быть в Z=0,
-            // // значит центр оболочки находится в Z = outerZ / 2.0
-            // new Geant4::G4PVPlacement(nullptr, Geant4::G4ThreeVector(0, 0, outerZ / 2.0),
-            //                           wrapperLogic, "SrcWrapper_Phys",
-            //                           motherVolume, false, 0, true);
-
-            // // 4. Размещаем внутренние слои ВНУТРИ оболочки
-            // // Внутренняя полость начинается сразу после нижней стенки (толщиной t).
-            // // В локальных координатах оболочки (от -outerZ/2 до +outerZ/2):
-            // // Старт = -outerZ/2 + t = -innerZTotal / 2.0
-
-            // double localCurrentZ = -innerZTotal / 2.0;
-            // double halfX = config.stackX / 2.0;
-            // double halfY = config.stackY / 2.0;
-
-            // int layerIndex = 0;
-            // for (const auto& layer : config.layers) {
-            //     double halfZ = layer.thickness / 2.0;
-
-            //     localCurrentZ += halfZ; // Центр внутреннего слоя
-
-            //     auto* solid = new Geant4::G4Box("SrcInner_Solid_" + std::to_string(layerIndex),
-            //                                     halfX, halfY, halfZ);
-            //     auto* logic = new Geant4::G4LogicalVolume(solid, GetMaterial(layer.material),
-            //                                               "SrcInner_Logic_" + std::to_string(layerIndex));
-
-            //     // ВАЖНО: Размещаем в wrapperLogic!
-            //     new Geant4::G4PVPlacement(nullptr, Geant4::G4ThreeVector(0, 0, localCurrentZ),
-            //                               logic, "SrcInner_Phys_" + std::to_string(layerIndex),
-            //                               wrapperLogic, false, layerIndex, true);
-
-            //     localCurrentZ += halfZ; // Переход на верхнюю границу
-            //     layerIndex++;
-            // }
+            return detectorLogicalVolumes;
         }
-    };
-}
+
+        const double halfX = config.stackX / 2.0;
+        const double halfY = config.stackY / 2.0;
+
+        double currentZ = 0.0;
+
+        int layerIndex = 0;
+
+        for (const auto& layer : config.layers) {
+            const double halfZ = layer.thickness / 2.0;
+
+            currentZ -= halfZ;
+
+            const auto solidName =
+                "DetLayer_Solid_" + std::to_string(layerIndex);
+
+            auto* solid = new Geant4::G4Box(
+                solidName,
+                halfX,
+                halfY,
+                halfZ
+            );
+
+            const auto logicName =
+                "DetLayer_Logic_" + std::to_string(layerIndex);
+
+            auto* logic = new Geant4::G4LogicalVolume(
+                solid,
+                GetMaterial(layer.material),
+                logicName
+            );
+
+            detectorLogicalVolumes.push_back(logic);
+
+            const auto physName =
+                "DetLayer_Phys_" + std::to_string(layerIndex);
+
+            new Geant4::G4PVPlacement(
+                nullptr,
+                Geant4::G4ThreeVector(0.0, 0.0, currentZ),
+                logic,
+                physName,
+                motherVolume,
+                false,
+                layerIndex,
+                true
+            );
+
+            currentZ -= halfZ;
+            ++layerIndex;
+        }
+
+        return detectorLogicalVolumes;
+    }
+};
+
+// -----------------------------------------------------------------
+// SOURCE СЛОИ
+// Строятся вдоль +Z.
+// НЕ sensitive.
+// -----------------------------------------------------------------
+class SourceLayerBuilder : public BaseLayerBuilder {
+public:
+    void Build(
+        const BetaSimLib::Models::SourceLayerConfig& config,
+        Geant4::G4LogicalVolume* motherVolume
+    ) const {
+        if (config.layers.empty()) {
+            return;
+        }
+
+        if (!motherVolume) {
+            Geant4::G4Exception(
+                "SourceLayerBuilder",
+                "NullMotherVolume",
+                Geant4::G4ExceptionSeverity::FatalException,
+                "Mother volume is null."
+            );
+
+            return;
+        }
+
+        if (config.type == "wrapped_stack") {
+            BuildWrappedStack(config, motherVolume);
+        } else {
+            BuildNormalStack(config, motherVolume);
+        }
+    }
+
+private:
+    void BuildNormalStack(
+        const BetaSimLib::Models::SourceLayerConfig& config,
+        Geant4::G4LogicalVolume* motherVolume
+    ) const {
+        const double halfX = config.stackX / 2.0;
+        const double halfY = config.stackY / 2.0;
+
+        double currentZ = 0.0;
+
+        int layerIndex = 0;
+
+        for (const auto& layer : config.layers) {
+            const double halfZ = layer.thickness / 2.0;
+
+            currentZ += halfZ;
+
+            auto* solid = new Geant4::G4Box(
+                "SrcLayer_Solid_" + std::to_string(layerIndex),
+                halfX,
+                halfY,
+                halfZ
+            );
+
+            auto* logic = new Geant4::G4LogicalVolume(
+                solid,
+                GetMaterial(layer.material),
+                "SrcLayer_Logic_" + std::to_string(layerIndex)
+            );
+
+            new Geant4::G4PVPlacement(
+                nullptr,
+                Geant4::G4ThreeVector(0.0, 0.0, currentZ),
+                logic,
+                "SrcLayer_Phys_" + std::to_string(layerIndex),
+                motherVolume,
+                false,
+                layerIndex,
+                true
+            );
+
+            currentZ += halfZ;
+            ++layerIndex;
+        }
+    }
+
+    void BuildWrappedStack(
+        const BetaSimLib::Models::SourceLayerConfig& config,
+        Geant4::G4LogicalVolume* motherVolume
+    ) const {
+        // TODO: позже реализуешь wrapped source.
+        BuildNormalStack(config, motherVolume);
+    }
+};
+
+} // namespace BetaSimLib::Layers

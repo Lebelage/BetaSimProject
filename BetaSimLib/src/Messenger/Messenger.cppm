@@ -121,7 +121,7 @@ private:
 
       fCfg = std::make_unique<BetaSimLib::Models::BaseExperimentConfig>();
       fState = ParseState::Global;
-      // commandManager->ApplyCommand(std::move(fCfg));
+      
       return;
     }
 
