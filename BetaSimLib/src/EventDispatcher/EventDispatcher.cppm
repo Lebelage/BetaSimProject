@@ -1,6 +1,3 @@
-//
-// Created by Sonora on 26.06.2026.
-//
 export module BetaSimLib.EventDispatcher;
 import std;
 import BetaSimLib.Utils.Event;

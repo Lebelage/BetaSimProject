@@ -41,10 +41,13 @@ module;
 #include "G4VUserPrimaryGeneratorAction.hh"
 #include "G4ParticleGun.hh"
 #include "G4ParticleTable.hh"
+#include "G4IonTable.hh"
+
 
 #include "CLHEP/Units/SystemOfUnits.h"
 export module Geant4.Externals;
 export namespace Geant4{
+    using ::G4IonTable;
     using ::G4NistManager;
     using ::G4VPhysicalVolume;
     using ::G4VUserDetectorConstruction;

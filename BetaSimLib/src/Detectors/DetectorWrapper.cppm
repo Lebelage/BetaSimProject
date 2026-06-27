@@ -9,62 +9,75 @@ import BetaSimLib.Concepts.Detectors;
 
 export namespace BetaSimLib::Detectors {
 
-    class DetectorWrapper final : public Geant4::G4VUserDetectorConstruction {
+class DetectorWrapper final : public Geant4::G4VUserDetectorConstruction {
 #pragma region Constructors/Destructors
 
-    public:
-        DetectorWrapper() = default;
-        ~DetectorWrapper() override = default;
+public:
+    DetectorWrapper() = default;
+    ~DetectorWrapper() override = default;
 
-        DetectorWrapper(const DetectorWrapper&) = delete;
-        DetectorWrapper& operator=(const DetectorWrapper&) = delete;
+    DetectorWrapper(const DetectorWrapper&) = delete;
+    DetectorWrapper& operator=(const DetectorWrapper&) = delete;
 
-        DetectorWrapper(DetectorWrapper&&) = delete;
-        DetectorWrapper& operator=(DetectorWrapper&&) = delete;
+    DetectorWrapper(DetectorWrapper&&) = delete;
+    DetectorWrapper& operator=(DetectorWrapper&&) = delete;
 
 #pragma endregion
 
 #pragma region Methods
 
-    public:
-        template<Concepts::Detectors::DetectorConstructionConcept Detector>
-        void SetBuilder(std::unique_ptr<Detector> builder) {
-            currentBuilder = std::move(builder);
+public:
+    template<Concepts::Detectors::DetectorConstructionConcept Detector>
+    void SetBuilder(std::unique_ptr<Detector> builder) {
+        currentBuilder = std::move(builder);
+    }
+
+    bool HasBuilder() const {
+        return currentBuilder != nullptr;
+    }
+
+    Geant4::G4VPhysicalVolume* Construct() override {
+        if (!currentBuilder) {
+            Geant4::G4Exception(
+                "DetectorWrapper",
+                "NoDetectorBuilder",
+                Geant4::G4ExceptionSeverity::FatalException,
+                "Detector builder is not set."
+            );
+
+            return nullptr;
         }
 
-        bool HasBuilder() const {
-            return currentBuilder != nullptr;
+        auto* world = currentBuilder->Construct();
+
+        if (!world) {
+            Geant4::G4Exception(
+                "DetectorWrapper",
+                "NullWorld",
+                Geant4::G4ExceptionSeverity::FatalException,
+                "Detector builder returned nullptr world."
+            );
+
+            return nullptr;
         }
 
-        Geant4::G4VPhysicalVolume* Construct() override {
-            if (!currentBuilder) {
-                Geant4::G4Exception(
-                    "DetectorWrapper",
-                    "NoDetectorBuilder",
-                    Geant4::G4ExceptionSeverity::FatalException,
-                    "Detector builder is not set."
-                );
+        return world;
+    }
 
-                return nullptr;
-            }
-
-            return currentBuilder->Construct();
+    void ConstructSDandField() override {
+        if (currentBuilder) {
+            currentBuilder->ConstructSDandField();
         }
-
-        void ConstructSDandField() override {
-            if (currentBuilder) {
-                currentBuilder->ConstructSDandField();
-            }
-        }
+    }
 
 #pragma endregion
 
 #pragma region Variables
 
-    private:
-        std::unique_ptr<Geant4::G4VUserDetectorConstruction> currentBuilder;
+private:
+    std::unique_ptr<Geant4::G4VUserDetectorConstruction> currentBuilder;
 
 #pragma endregion
-    };
+};
 
 } // namespace BetaSimLib::Detectors

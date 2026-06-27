@@ -6,44 +6,47 @@ export module BetaSimLib.Generators.GeneratorManager;
 import std;
 import Geant4.Externals;
 
+import BetaSimLib.Models.Experiment;
 import BetaSimLib.Runtime.ExperimentState;
 import BetaSimLib.Generators.GeneratorWrapper;
 
 export namespace BetaSimLib::Generators {
 
-    class GeneratorManager {
-#pragma region Constructors/Destructors
+class GeneratorManager {
+public:
+    explicit GeneratorManager(
+        std::shared_ptr<BetaSimLib::Runtime::ExperimentState> state
+    )
+        : state(std::move(state)) {
+    }
 
-    public:
-        explicit GeneratorManager(std::shared_ptr<Runtime::ExperimentState> state)
-            : state(std::move(state)) {
-        }
+    ~GeneratorManager() = default;
 
-        ~GeneratorManager() = default;
+    GeneratorManager(const GeneratorManager&) = delete;
+    GeneratorManager& operator=(const GeneratorManager&) = delete;
 
-        GeneratorManager(const GeneratorManager&) = delete;
-        GeneratorManager& operator=(const GeneratorManager&) = delete;
+    GeneratorManager(GeneratorManager&&) = delete;
+    GeneratorManager& operator=(GeneratorManager&&) = delete;
 
-        GeneratorManager(GeneratorManager&&) = delete;
-        GeneratorManager& operator=(GeneratorManager&&) = delete;
+public:
+    void ApplyConfig(
+        std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> config
+    ) {
+        currentConfig = std::move(config);
 
-#pragma endregion
+        // Важно:
+        // уже созданные worker GeneratorWrapper не заменяются здесь.
+        // Они сами увидят новый config через ExperimentState
+        // и пересоздадут свой внутренний generator в GeneratePrimaries().
+    }
 
-#pragma region Methods
+    Geant4::G4VUserPrimaryGeneratorAction* CreateGeneratorForWorker() const {
+        return new GeneratorWrapper(state);
+    }
 
-    public:
-        Geant4::G4VUserPrimaryGeneratorAction* CreateGeneratorForWorker() const {
-            return new GeneratorWrapper(state);
-        }
-
-#pragma endregion
-
-#pragma region Variables
-
-    private:
-        std::shared_ptr<Runtime::ExperimentState> state;
-
-#pragma endregion
-    };
+private:
+    std::shared_ptr<BetaSimLib::Runtime::ExperimentState> state;
+    std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> currentConfig;
+};
 
 } // namespace BetaSimLib::Generators

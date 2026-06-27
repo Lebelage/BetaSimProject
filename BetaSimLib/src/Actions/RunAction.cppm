@@ -14,7 +14,11 @@ export namespace BetaSimLib::Actions {
 #pragma endregion
 
 #pragma region Methods
-        void BeginOfRunAction(const Geant4::G4Run* run) override {}
+        void BeginOfRunAction(const Geant4::G4Run* run) override 
+        {
+
+            
+        }
 
         void EndOfRunAction(const Geant4::G4Run* run) override {}
 #pragma endregion

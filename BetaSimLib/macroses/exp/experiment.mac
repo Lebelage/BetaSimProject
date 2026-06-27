@@ -8,78 +8,60 @@
 
 # ============================================================
 # World
-# Заполняет:
-#   BaseExperimentConfig::worldMaterial
-#   BaseExperimentConfig::worldSize
 # ============================================================
 
 /exp/world/material G4_Galactic
-/exp/world/size 1 m
+/exp/world/size 2 cm
 
 
 # ============================================================
 # Materials
-# Заполняет:
-#   BaseExperimentConfig::matBuild
-#   BaseExperimentConfig::matBuildX
 # ============================================================
 
-# Пример обычного материала через массовые доли
-#/exp/material/create MyScintillator 1.032 g/cm3
-#/exp/material/addMassFraction MyScintillator C 0.915
-#/exp/material/addMassFraction MyScintillator H 0.085
-#/exp/material/finalize MyScintillator
-
-# Пример материала через x-параметр
-# Например Al_xGa_{1-x}N, x = 0.3
-/exp/material/createx AlGaN 0.3
+/exp/material/create GaN 6.15 g/cm3
+/exp/material/addMassFraction GaN Ga 0.8326
+/exp/material/addMassFraction GaN N  0.1674
+/exp/material/finalize GaN
 
 
 # ============================================================
-# Detector layer block
-# Заполняет:
-#   BaseExperimentConfig::detector
+# Source layer: Ni-63
+# Строится от Z = 0 в сторону +Z
+# ============================================================
+
+/exp/SourceLayer/start
+/exp/SourceLayer/type stack
+/exp/stack/xy 5 mm 5 mm
+/exp/layer/add G4_Ni 10 um
+/exp/SourceLayer/end
+
+
+# ============================================================
+# Detector: 3 слоя GaN
+# Строится от Z = 0 в сторону -Z
 # ============================================================
 
 /exp/DetectorLayer/start
-/exp/stack/xy 10 cm 10 cm
-/exp/layer/add G4_Ti 500 um
+/exp/stack/xy 5 mm 5 mm
+/exp/layer/add GaN 500 um
+/exp/layer/add GaN 500 um
+/exp/layer/add GaN 500 um
 /exp/DetectorLayer/end
 
 
 # ============================================================
-# Source layer block
-# Заполняет:
-#   BaseExperimentConfig::sourceLayer
+# Source physics: Ni-63
+# Ni: Z = 28, A = 63
 # ============================================================
 
-#/exp/SourceLayer/start
-#/exp/SourceLayerType/ stack
-#/exp/stack/xy 5 cm 5 cm
-#/exp/layer/add MyScintillator 100 um
-#/exp/SourceLayer/end
-
-
-# ============================================================
-# Source physics
-# Заполняет:
-#   BaseExperimentConfig::sourceType
-#   BaseExperimentConfig::gun
-# ============================================================
-
-/exp/source/type gun
-/exp/source/gun/particle e-
-/exp/source/gun/energy 1 MeV
-/exp/source/gun/pos 0 0 -10 cm
-/exp/source/gun/dir 0 0 1
+/exp/source/type decay
+/exp/source/decay/ion 28 63
+/exp/source/decay/excitation 0 keV
+/exp/source/decay/charge 0
 
 
 # ============================================================
 # Apply
-# Финальный сигнал: конфиг полностью заполнен
 # ============================================================
 
 /exp/apply
-
-/vis/disable
-/tracking/storeTrajectory 0

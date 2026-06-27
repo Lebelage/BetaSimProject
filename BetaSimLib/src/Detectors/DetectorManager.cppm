@@ -7,9 +7,11 @@ import std;
 import Geant4.Externals;
 
 import BetaSimLib.Models.Experiment;
+import BetaSimLib.Concepts.Detectors;
+
 import BetaSimLib.Detectors.DetectorWrapper;
 import BetaSimLib.Detectors.StartDetector;
-import BetaSimLib.Concepts.Detectors;
+import BetaSimLib.Detectors.BaseDetectorConstruction;
 
 export namespace BetaSimLib::Detectors {
 
@@ -18,8 +20,7 @@ class DetectorManager {
 
 public:
     DetectorManager()
-        : ownedWrapper(std::make_unique<DetectorWrapper>()),
-          wrapperView(ownedWrapper.get()) {
+        : detWrapper(std::make_unique<DetectorWrapper>()) {
     }
 
     ~DetectorManager() = default;
@@ -37,7 +38,7 @@ public:
 public:
     template<Concepts::Detectors::DetectorConstructionConcept Detector>
     void SetDetector(std::unique_ptr<Detector> detector) {
-        if (!wrapperView) {
+        if (!detWrapper) {
             Geant4::G4Exception(
                 "DetectorManager",
                 "NoDetectorWrapper",
@@ -48,47 +49,42 @@ public:
             return;
         }
 
-        wrapperView->SetBuilder(std::move(detector));
+        detWrapper->SetBuilder(std::move(detector));
     }
 
-    void ApplyConfig(std::shared_ptr<const Models::BaseExperimentConfig> config) {
-        currentConfig = std::move(config);
+    void ApplyConfig(std::shared_ptr<const Models::BaseExperimentConfig> newConfig) {
+        currentConfig = std::move(newConfig);
 
         if (!currentConfig) {
-            SetDetector(std::make_unique<StartDetector>());
+            SetDetector(
+                std::make_unique<StartDetector>()
+            );
+
             return;
         }
 
         switch (currentConfig->type) {
             case Models::ExpType::Stack:
-                // TODO:
-                // Здесь потом поставишь свой реальный builder:
-                //
-                // SetDetector(
-                //     std::make_unique<StackDetectorConstruction>(currentConfig)
-                // );
-                //
-                // Пока временно оставляем StartDetector.
-                SetDetector(std::make_unique<StartDetector>());
+                SetDetector(
+                    std::make_unique<BaseDetectorConstruction>(currentConfig)
+                );
                 break;
 
             case Models::ExpType::None:
             default:
-                SetDetector(std::make_unique<StartDetector>());
+                SetDetector(
+                    std::make_unique<StartDetector>()
+                );
                 break;
         }
     }
 
     DetectorWrapper* GetCurrentDetectorPointer() {
-        return wrapperView;
+        return detWrapper.get();
     }
 
     const DetectorWrapper* GetCurrentDetectorPointer() const {
-        return wrapperView;
-    }
-
-    Geant4::G4VUserDetectorConstruction* ReleaseDetectorToGeant4() {
-        return ownedWrapper.release();
+        return detWrapper.get();
     }
 
 #pragma endregion
@@ -96,9 +92,7 @@ public:
 #pragma region Variables
 
 private:
-    std::unique_ptr<DetectorWrapper> ownedWrapper;
-    DetectorWrapper* wrapperView = nullptr;
-
+    std::unique_ptr<DetectorWrapper> detWrapper;
     std::shared_ptr<const Models::BaseExperimentConfig> currentConfig;
 
 #pragma endregion

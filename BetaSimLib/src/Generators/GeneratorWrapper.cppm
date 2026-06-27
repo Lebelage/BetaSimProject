@@ -8,16 +8,20 @@ import Geant4.Externals;
 
 import BetaSimLib.Models.Experiment;
 import BetaSimLib.Runtime.ExperimentState;
+import BetaSimLib.Concepts.Generators.GeneratorConcept;
+
+import BetaSimLib.Generators.BaseGenerator;
+import BetaSimLib.Generators.GunGenerator;
+import BetaSimLib.Generators.RadioIsotopeGenerator;
 
 export namespace BetaSimLib::Generators {
 
 class GeneratorWrapper final : public Geant4::G4VUserPrimaryGeneratorAction {
-#pragma region Constructors/Destructors
-
 public:
-    explicit GeneratorWrapper(std::shared_ptr<Runtime::ExperimentState> state)
-        : state(std::move(state)),
-          gun(std::make_unique<Geant4::G4ParticleGun>(1)) {
+    explicit GeneratorWrapper(
+        std::shared_ptr<BetaSimLib::Runtime::ExperimentState> state
+    )
+        : state(std::move(state)) {
     }
 
     ~GeneratorWrapper() override = default;
@@ -28,11 +32,12 @@ public:
     GeneratorWrapper(GeneratorWrapper&&) = delete;
     GeneratorWrapper& operator=(GeneratorWrapper&&) = delete;
 
-#pragma endregion
-
-#pragma region Methods
-
 public:
+    template<BetaSimLib::Concepts::Generators::SourceGeneratorConcept Generator>
+    void SetSourceGenerator(std::unique_ptr<Generator> generator) {
+        currentGenerator = std::move(generator);
+    }
+
     void GeneratePrimaries(Geant4::G4Event* event) override {
         auto cfg = state->GetConfig();
 
@@ -47,19 +52,54 @@ public:
             return;
         }
 
-        switch (cfg->sourceType) {
-            case Models::SourceType::Gun:
-                GenerateGun(event, *cfg);
-                return;
+        EnsureGeneratorIsActual(cfg);
 
-            case Models::SourceType::Decay:
-                Geant4::G4Exception(
-                    "GeneratorWrapper",
-                    "DecayNotImplemented",
-                    Geant4::G4ExceptionSeverity::FatalException,
-                    "Decay source is not implemented yet."
+        if (!currentGenerator) {
+            Geant4::G4Exception(
+                "GeneratorWrapper",
+                "NoSourceGenerator",
+                Geant4::G4ExceptionSeverity::FatalException,
+                "Source generator is not set."
+            );
+
+            return;
+        }
+
+        currentGenerator->GeneratePrimaries(event);
+    }
+
+private:
+    void EnsureGeneratorIsActual(
+        const std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig>& cfg
+    ) {
+        const bool configChanged = observedConfig != cfg;
+        const bool typeChanged =
+            !activeSourceType.has_value() ||
+            activeSourceType.value() != cfg->sourceType;
+
+        if (!currentGenerator || configChanged || typeChanged) {
+            RebuildGenerator(cfg);
+        }
+    }
+
+    void RebuildGenerator(
+        const std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig>& cfg
+    ) {
+        observedConfig = cfg;
+        activeSourceType = cfg->sourceType;
+
+        switch (cfg->sourceType) {
+            case BetaSimLib::Models::SourceType::Gun:
+                SetSourceGenerator(
+                    std::make_unique<GunGenerator>(state)
                 );
-                return;
+                break;
+
+            case BetaSimLib::Models::SourceType::Decay:
+                SetSourceGenerator(
+                    std::make_unique<RadioIsotopeGenerator>(state)
+                );
+                break;
 
             default:
                 Geant4::G4Exception(
@@ -68,50 +108,17 @@ public:
                     Geant4::G4ExceptionSeverity::FatalException,
                     "Unknown source type."
                 );
-                return;
+                break;
         }
     }
 
 private:
-    void GenerateGun(
-        Geant4::G4Event* event,
-        const Models::BaseExperimentConfig& cfg
-    ) {
-        auto* particle =
-            Geant4::G4ParticleTable::GetParticleTable()
-                ->FindParticle(cfg.gun.particle);
+    std::shared_ptr<BetaSimLib::Runtime::ExperimentState> state;
 
-        if (!particle) {
-            const auto message =
-                std::string("Unknown particle: ") + cfg.gun.particle;
+    std::unique_ptr<Geant4::G4VUserPrimaryGeneratorAction> currentGenerator;
 
-            Geant4::G4Exception(
-                "GeneratorWrapper",
-                "UnknownParticle",
-                Geant4::G4ExceptionSeverity::FatalException,
-                message.c_str()
-            );
-
-            return;
-        }
-
-        gun->SetParticleDefinition(particle);
-        gun->SetParticleEnergy(cfg.gun.energy);
-        gun->SetParticlePosition(cfg.gun.pos);
-        gun->SetParticleMomentumDirection(cfg.gun.dir);
-
-        gun->GeneratePrimaryVertex(event);
-    }
-
-#pragma endregion
-
-#pragma region Variables
-
-private:
-    std::shared_ptr<Runtime::ExperimentState> state;
-    std::unique_ptr<Geant4::G4ParticleGun> gun;
-
-#pragma endregion
+    std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> observedConfig;
+    std::optional<BetaSimLib::Models::SourceType> activeSourceType;
 };
 
 } // namespace BetaSimLib::Generators
