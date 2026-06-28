@@ -172,20 +172,6 @@ public:
         if (totalEnergyDeposit <= 0.0 && totalElectronHolePairs <= 0.0) {
             return;
         }
-
-        Geant4::cout()
-            << "[DetectorSD] Event total:"
-            << " Edep = " << totalEnergyDeposit / Geant4::keV << " keV,"
-            << " EHP = " << totalElectronHolePairs
-            << Geant4::endl;
-
-        for (const auto& [layerId, edep] : layerEnergyDeposit) {
-            Geant4::cout()
-                << "  layer " << layerId
-                << " Edep = " << edep / Geant4::keV << " keV,"
-                << " EHP = " << layerElectronHolePairs[layerId]
-                << Geant4::endl;
-        }
     }
 
 private:
