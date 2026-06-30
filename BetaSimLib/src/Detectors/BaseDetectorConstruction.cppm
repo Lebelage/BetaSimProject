@@ -8,14 +8,14 @@ import Geant4.Externals;
 
 import BetaSimLib.Models.Experiment;
 import BetaSimLib.Materials.ExtendedMaterialService;
+import BetaSimLib.Materials.MaterialConstants;
 import BetaSimLib.Layers.DetectorLayerBuilder;
 import BetaSimLib.SensitiveDetectors.BaseSD;
 
 export namespace BetaSimLib::Detectors {
 
 class BaseDetectorConstruction final
-    : public Geant4::G4VUserDetectorConstruction
-{
+    : public Geant4::G4VUserDetectorConstruction {
 #pragma region Constructors/Destructors
 
 public:
@@ -84,17 +84,35 @@ public:
             true
         );
 
+        // Source layer — только геометрия.
+        // На него НЕ вешаем SD и НЕ задаём маленький step limit.
         BetaSimLib::Layers::SourceLayerBuilder sourceBuilder;
         sourceBuilder.Build(config->sourceLayer, logicWorld);
 
+        // Detector layers — geometry + UserLimits + SensitiveDetector.
         BetaSimLib::Layers::DetectorLayerBuilder detectorBuilder;
+
         detectorLogicalVolumes =
             detectorBuilder.Build(config->detector, logicWorld);
 
-        Geant4::cout() 
+        ApplyDetectorUserLimits();
+
+        Geant4::cout()
             << "[BaseDetectorConstruction] Built "
             << detectorLogicalVolumes.size()
             << " detector layers."
+            << Geant4::endl;
+
+        Geant4::cout()
+            << "[BaseDetectorConstruction] Detector thickness = "
+            << GetDetectorThickness() / Geant4::um
+            << " um"
+            << Geant4::endl;
+
+        Geant4::cout()
+            << "[BaseDetectorConstruction] Detector max step = "
+            << GetDetectorMaxStep() / Geant4::nm
+            << " nm"
             << Geant4::endl;
 
         return physicalWorld;
@@ -120,6 +138,18 @@ public:
             sdManager->AddNewDetector(detectorSD);
         }
 
+        // Настройки для SD:
+        // detectorThickness — полная толщина всех detector layers.
+        // detectorMaxStep    — шаг по глубине / spatial step.
+        // max spectrum       — 100 keV.
+        // spectrum bin       — 0.1 keV.
+        detectorSD->Configure(
+            GetDetectorThickness(),
+            GetDetectorMaxStep(),
+            100.0 * Geant4::keV,
+            0.1 * Geant4::keV
+        );
+
         for (auto* logicVolume : detectorLogicalVolumes) {
             if (!logicVolume) {
                 continue;
@@ -134,6 +164,60 @@ public:
             << " detector layers."
             << Geant4::endl;
     }
+
+#pragma endregion
+
+#pragma region Geometry Helpers
+
+private:
+    void ApplyDetectorUserLimits() const {
+        const auto maxStep = GetDetectorMaxStep();
+
+        if (maxStep <= 0.0) {
+            return;
+        }
+
+        for (auto* logicVolume : detectorLogicalVolumes) {
+            if (!logicVolume) {
+                continue;
+            }
+
+            logicVolume->SetUserLimits(
+                new Geant4::G4UserLimits(maxStep)
+            );
+        }
+    }
+
+    double GetDetectorThickness() const {
+        if (!config) {
+            return 0.0;
+        }
+
+        double totalThickness = 0.0;
+
+        for (const auto& layer : config->detector.layers) {
+            totalThickness += layer.thickness;
+        }
+
+        return totalThickness;
+    }
+
+    double GetDetectorMaxStep() const {
+        // ВАЖНО:
+        // MaterialsConstants::MAX_STEP_LIMIT считаем числом в nm.
+        //
+        // Например:
+        // MAX_STEP_LIMIT = 1.0   -> 1 nm
+        // MAX_STEP_LIMIT = 10.0  -> 10 nm
+        // MAX_STEP_LIMIT = 100.0 -> 100 nm
+
+        return BetaSimLib::Materials::MaterialsConstants::MAX_STEP_LIMIT
+            * Geant4::nm;
+    }
+
+#pragma endregion
+
+#pragma region Material Helpers
 
 private:
     Geant4::G4Material* ResolveWorldMaterial(
@@ -194,6 +278,9 @@ private:
 
 private:
     std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> config;
+
+    // Только detector layers.
+    // Source layer сюда не попадает.
     std::vector<Geant4::G4LogicalVolume*> detectorLogicalVolumes;
 
 #pragma endregion

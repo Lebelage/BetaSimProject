@@ -33,11 +33,6 @@ public:
         std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> config
     ) {
         currentConfig = std::move(config);
-
-        // Важно:
-        // уже созданные worker GeneratorWrapper не заменяются здесь.
-        // Они сами увидят новый config через ExperimentState
-        // и пересоздадут свой внутренний generator в GeneratePrimaries().
     }
 
     Geant4::G4VUserPrimaryGeneratorAction* CreateGeneratorForWorker() const {

@@ -26,6 +26,22 @@ struct ElectronSpectrumRecord {
     double kineticEnergy = 0.0;
 };
 
+struct DepthProfileBin {
+    std::uint64_t stepCount = 0;
+
+    int layerId = -1;
+
+    std::string layerName;
+    std::string materialName;
+
+    double depthMin = 0.0;
+    double depthMax = 0.0;
+    double depthCenter = 0.0;
+
+    double totalEnergyDeposit = 0.0;
+    double totalElectronHolePairs = 0.0;
+};
+
 class SimulationStatisticsService {
 #pragma region Singleton
 
@@ -64,6 +80,18 @@ public:
         electronSpectrumRecords.clear();
         eventDepthStepCounters.clear();
 
+        eventCount = 0;
+        reflectedCount = 0;
+
+        for (auto& bin : depthProfileBins) {
+            bin.stepCount = 0;
+            bin.layerId = -1;
+            bin.layerName.clear();
+            bin.materialName.clear();
+            bin.totalEnergyDeposit = 0.0;
+            bin.totalElectronHolePairs = 0.0;
+        }
+
         std::fill(
             electronSpectrumBins.begin(),
             electronSpectrumBins.end(),
@@ -88,6 +116,54 @@ public:
         electronSpectrumBins.assign(binCount, 0);
     }
 
+    void ConfigureDepthProfile(
+        double detectorThickness,
+        double depthBinWidth
+    ) {
+        std::lock_guard lock(mutex);
+
+        this->detectorThickness = detectorThickness;
+        this->depthBinWidth = depthBinWidth;
+
+        depthProfileBins.clear();
+
+        if (detectorThickness <= 0.0 || depthBinWidth <= 0.0) {
+            return;
+        }
+
+        const auto binCount =
+            static_cast<std::size_t>(
+                std::ceil(detectorThickness / depthBinWidth)
+            );
+
+        depthProfileBins.resize(std::max<std::size_t>(1, binCount));
+
+        for (std::size_t i = 0; i < depthProfileBins.size(); ++i) {
+            auto& bin = depthProfileBins[i];
+
+            bin.depthMin = static_cast<double>(i) * depthBinWidth;
+            bin.depthMax = bin.depthMin + depthBinWidth;
+            bin.depthCenter = 0.5 * (bin.depthMin + bin.depthMax);
+
+            bin.stepCount = 0;
+            bin.layerId = -1;
+            bin.layerName.clear();
+            bin.materialName.clear();
+            bin.totalEnergyDeposit = 0.0;
+            bin.totalElectronHolePairs = 0.0;
+        }
+    }
+
+    void RecordEvent() {
+        std::lock_guard lock(mutex);
+        ++eventCount;
+    }
+
+    void RecordReflected() {
+        std::lock_guard lock(mutex);
+        ++reflectedCount;
+    }
+
     void RecordDetectorStep(
         std::uint64_t eventIndex,
         int layerId,
@@ -104,7 +180,6 @@ public:
 
         DetectorStepRecord record;
 
-        // depthStep — это глубина/номер шага внутри конкретного event.
         record.depthStep = ++eventDepthStepCounters[eventIndex];
 
         record.layerId = layerId;
@@ -117,6 +192,54 @@ public:
         record.eventIndex = eventIndex;
 
         detectorStepRecords.push_back(std::move(record));
+    }
+
+    void RecordDepthProfileStep(
+        double depth,
+        int layerId,
+        std::string layerName,
+        std::string materialName,
+        double energyDeposit,
+        double electronHolePairs
+    ) {
+        if (depth < 0.0) {
+            return;
+        }
+
+        if (energyDeposit <= 0.0 && electronHolePairs <= 0.0) {
+            return;
+        }
+
+        std::lock_guard lock(mutex);
+
+        if (depthProfileBins.empty() || depthBinWidth <= 0.0) {
+            return;
+        }
+
+        auto binIndex =
+            static_cast<std::size_t>(
+                std::floor(depth / depthBinWidth)
+            );
+
+        if (binIndex >= depthProfileBins.size()) {
+            return;
+        }
+
+        auto& bin = depthProfileBins[binIndex];
+
+        bin.stepCount++;
+        bin.layerId = layerId;
+
+        if (bin.layerName.empty()) {
+            bin.layerName = std::move(layerName);
+        }
+
+        if (bin.materialName.empty()) {
+            bin.materialName = std::move(materialName);
+        }
+
+        bin.totalEnergyDeposit += energyDeposit;
+        bin.totalElectronHolePairs += electronHolePairs;
     }
 
     void RecordElectronEntryEnergy(double kineticEnergy) {
@@ -169,6 +292,16 @@ public:
             << Geant4::endl;
 
         Geant4::cout()
+            << "Events recorded: "
+            << eventCount
+            << Geant4::endl;
+
+        Geant4::cout()
+            << "Reflected electrons: "
+            << reflectedCount
+            << Geant4::endl;
+
+        Geant4::cout()
             << "Detector step records: "
             << detectorStepRecords.size()
             << Geant4::endl;
@@ -176,6 +309,11 @@ public:
         Geant4::cout()
             << "Electron spectrum records: "
             << electronSpectrumRecords.size()
+            << Geant4::endl;
+
+        Geant4::cout()
+            << "Depth profile bins: "
+            << depthProfileBins.size()
             << Geant4::endl;
 
         Geant4::cout()
@@ -194,8 +332,12 @@ public:
         const auto electronSpectrumPath =
             outputDirectory + "/electron_spectrum.csv";
 
+        const auto depthProfilePath =
+            outputDirectory + "/depth_profile.csv";
+
         ExportDetectorSteps(detectorStepsPath);
         ExportElectronSpectrum(electronSpectrumPath);
+        ExportDepthProfile(depthProfilePath);
 
         Geant4::cout()
             << "[Statistics] Exported detector steps to: "
@@ -205,6 +347,11 @@ public:
         Geant4::cout()
             << "[Statistics] Exported electron spectrum to: "
             << electronSpectrumPath
+            << Geant4::endl;
+
+        Geant4::cout()
+            << "[Statistics] Exported depth profile to: "
+            << depthProfilePath
             << Geant4::endl;
     }
 
@@ -390,6 +537,72 @@ private:
         }
     }
 
+    void ExportDepthProfile(const std::string& filePath) const {
+        std::ofstream file(filePath);
+
+        if (!file.is_open()) {
+            Geant4::G4Exception(
+                "SimulationStatisticsService",
+                "DepthProfileExportFailed",
+                Geant4::G4ExceptionSeverity::JustWarning,
+                ("Cannot open file: " + filePath).c_str()
+            );
+
+            return;
+        }
+
+        file
+            << "depth_bin,"
+            << "depth_min_nm,"
+            << "depth_max_nm,"
+            << "depth_center_nm,"
+            << "layer_id,"
+            << "layer_name,"
+            << "material,"
+            << "step_count,"
+            << "energy_deposit_eV,"
+            << "energy_deposit_keV,"
+            << "electron_hole_pairs"
+            << "\n";
+
+        for (std::size_t i = 0; i < depthProfileBins.size(); ++i) {
+            const auto& bin = depthProfileBins[i];
+
+            WriteCsvInteger(file, static_cast<std::uint64_t>(i));
+            file << ",";
+
+            WriteCsvNumber(file, bin.depthMin / Geant4::nm);
+            file << ",";
+
+            WriteCsvNumber(file, bin.depthMax / Geant4::nm);
+            file << ",";
+
+            WriteCsvNumber(file, bin.depthCenter / Geant4::nm);
+            file << ",";
+
+            file << bin.layerId;
+            file << ",";
+
+            WriteCsvString(file, bin.layerName);
+            file << ",";
+
+            WriteCsvString(file, bin.materialName);
+            file << ",";
+
+            WriteCsvInteger(file, bin.stepCount);
+            file << ",";
+
+            WriteCsvNumber(file, bin.totalEnergyDeposit / Geant4::eV);
+            file << ",";
+
+            WriteCsvNumber(file, bin.totalEnergyDeposit / Geant4::keV);
+            file << ",";
+
+            WriteCsvNumber(file, bin.totalElectronHolePairs);
+            file << "\n";
+        }
+    }
+
 #pragma endregion
 
 #pragma region Variables
@@ -400,13 +613,20 @@ private:
     std::vector<DetectorStepRecord> detectorStepRecords;
     std::vector<ElectronSpectrumRecord> electronSpectrumRecords;
 
-    // Для depth_step: отдельный счётчик шага по глубине для каждого event.
     std::map<std::uint64_t, std::uint64_t> eventDepthStepCounters;
+
+    std::uint64_t eventCount = 0;
+    std::uint64_t reflectedCount = 0;
 
     double spectrumMinEnergy = 0.0;
     double spectrumMaxEnergy = 100.0 * Geant4::keV;
 
     std::vector<std::uint64_t> electronSpectrumBins;
+
+    double detectorThickness = 0.0;
+    double depthBinWidth = 0.0;
+
+    std::vector<DepthProfileBin> depthProfileBins;
 
 #pragma endregion
 };

@@ -6,7 +6,7 @@ import std;
 import Geant4.Externals;
 import BetaSimLib.Materials.ExtendedMaterial;
 import BetaSimLib.Materials.MaterialConstants;
-import BetaSimLib.Models.Experiment; // Подключаем модели для доступа к конфигу
+import BetaSimLib.Models.Experiment; 
 
 export namespace BetaSimLib::Materials {
 using namespace BetaSimLib::Models; // Для BaseExperimentConfig
