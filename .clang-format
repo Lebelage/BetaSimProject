@@ -1,0 +1,15 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Настройки отступов
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# Оформление
+ColumnLimit: 120        s          
+BreakBeforeBraces: Attach          
+PointerAlignment: Left             
+SortIncludes: true                 
+---

@@ -37,6 +37,13 @@ target_sources(BetaSimLib
         ${ALL_SOURCES}
 )
 
-target_link_libraries(BetaSimLib PUBLIC ${Geant4_LIBRARIES})
+find_package(nlohmann_json CONFIG REQUIRED)
+
+target_link_libraries(BetaSimLib 
+    PUBLIC 
+        ${Geant4_LIBRARIES}
+        nlohmann_json::nlohmann_json
+)
+
 target_include_directories(BetaSimLib PUBLIC ${Geant4_INCLUDE_DIRS})
 target_compile_definitions(BetaSimLib PUBLIC ${Geant4_DEFINITIONS})
