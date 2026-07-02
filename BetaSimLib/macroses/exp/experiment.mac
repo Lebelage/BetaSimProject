@@ -32,7 +32,7 @@
 /exp/SourceLayer/start
 /exp/SourceLayer/type stack
 /exp/stack/xy 10 mm 10 mm
-/exp/layer/add G4_Ni 20 um
+/exp/layer/add G4_Ni 50 um
 /exp/SourceLayer/end
 
 

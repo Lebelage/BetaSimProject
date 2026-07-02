@@ -38,7 +38,8 @@ public:
         double detectorThickness,
         double zBinWidth,
         double maxSpectrumEnergy,
-        double spectrumBinWidth
+        double spectrumBinWidth,
+        const std::vector<BetaSimLib::Statistics::DepthLayerDescriptor>& layerDescriptors
     ) {
         if (zBinWidth <= 0.0) {
             zBinWidth = 1.0 * Geant4::nm;
@@ -66,7 +67,8 @@ public:
 
         stats.ConfigureDepthProfile(
             detectorThickness,
-            zBinWidth
+            zBinWidth,
+            layerDescriptors
         );
 
         const auto spectrumBinCount =
@@ -145,7 +147,6 @@ public:
     ) override {
         BetaSimLib::Statistics::SimulationStatisticsService::Instance()
             .RecordEvent();
-
     }
 
 #pragma endregion
@@ -165,11 +166,13 @@ private:
             return;
         }
 
-        // Электрон только что вошёл в sensitive detector volume.
         if (preStepPoint->GetStepStatus() != Geant4::fGeomBoundary) {
             return;
         }
 
+        // Текущая геометрия:
+        // source в +Z, detector уходит в -Z.
+        // Электрон, входящий из source в detector, летит с direction.z < 0.
         if (preStepPoint->GetMomentumDirection().z() >= 0.0) {
             return;
         }
@@ -224,7 +227,8 @@ private:
         const std::string postVolumeName =
             postVolume->GetName();
 
-        
+        // Если электрон вышел из detector volume обратно в сторону source.
+        // Source в +Z, значит отражение назад имеет direction.z > 0.
         if (!IsDetectorPhysicalVolumeName(postVolumeName)) {
             if (postStepPoint->GetMomentumDirection().z() > 0.0) {
                 BetaSimLib::Statistics::SimulationStatisticsService::Instance()
@@ -445,12 +449,6 @@ private:
     double ResolvePairCreationEnergy(
         const std::string& materialName
     ) const {
-        // Старый подход:
-        // E_EHP_eV = 2.8 * Eg + 0.6
-        //
-        // Для GaN с Eg около 3.4 eV:
-        // 2.8 * 3.4 + 0.6 ~= 10.12 eV.
-
         auto optExtMat =
             BetaSimLib::Materials::ExtendedMaterialService::Instance()
                 .Get(materialName);
@@ -470,7 +468,6 @@ private:
             return 10.12 * Geant4::eV;
         }
 
-        // Для металлов и неизвестных материалов ЭДП не считаем.
         return 0.0;
     }
 

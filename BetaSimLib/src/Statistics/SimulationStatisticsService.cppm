@@ -26,6 +26,16 @@ struct ElectronSpectrumRecord {
     double kineticEnergy = 0.0;
 };
 
+struct DepthLayerDescriptor {
+    int layerId = -1;
+
+    std::string layerName;
+    std::string materialName;
+
+    double depthStart = 0.0;
+    double depthEnd = 0.0;
+};
+
 struct DepthProfileBin {
     std::uint64_t stepCount = 0;
 
@@ -62,7 +72,7 @@ private:
         ConfigureElectronSpectrum(
             0.0 * Geant4::keV,
             100.0 * Geant4::keV,
-            100
+            1000
         );
     }
 
@@ -83,11 +93,11 @@ public:
         eventCount = 0;
         reflectedCount = 0;
 
+        // ВАЖНО:
+        // Не очищаем depthMin/depthMax/layer/material.
+        // Разметка глубины по слоям должна сохраниться после ConfigureDepthProfile().
         for (auto& bin : depthProfileBins) {
             bin.stepCount = 0;
-            bin.layerId = -1;
-            bin.layerName.clear();
-            bin.materialName.clear();
             bin.totalEnergyDeposit = 0.0;
             bin.totalElectronHolePairs = 0.0;
         }
@@ -118,12 +128,14 @@ public:
 
     void ConfigureDepthProfile(
         double detectorThickness,
-        double depthBinWidth
+        double depthBinWidth,
+        const std::vector<DepthLayerDescriptor>& layerDescriptors
     ) {
         std::lock_guard lock(mutex);
 
         this->detectorThickness = detectorThickness;
         this->depthBinWidth = depthBinWidth;
+        this->depthLayerDescriptors = layerDescriptors;
 
         depthProfileBins.clear();
 
@@ -146,11 +158,24 @@ public:
             bin.depthCenter = 0.5 * (bin.depthMin + bin.depthMax);
 
             bin.stepCount = 0;
+            bin.totalEnergyDeposit = 0.0;
+            bin.totalElectronHolePairs = 0.0;
+
             bin.layerId = -1;
             bin.layerName.clear();
             bin.materialName.clear();
-            bin.totalEnergyDeposit = 0.0;
-            bin.totalElectronHolePairs = 0.0;
+
+            for (const auto& layer : layerDescriptors) {
+                if (
+                    bin.depthCenter >= layer.depthStart &&
+                    bin.depthCenter < layer.depthEnd
+                ) {
+                    bin.layerId = layer.layerId;
+                    bin.layerName = layer.layerName;
+                    bin.materialName = layer.materialName;
+                    break;
+                }
+            }
         }
     }
 
@@ -222,13 +247,21 @@ public:
             );
 
         if (binIndex >= depthProfileBins.size()) {
-            return;
+            binIndex = depthProfileBins.size() - 1;
         }
 
         auto& bin = depthProfileBins[binIndex];
 
         bin.stepCount++;
-        bin.layerId = layerId;
+        bin.totalEnergyDeposit += energyDeposit;
+        bin.totalElectronHolePairs += electronHolePairs;
+
+        // Fallback:
+        // Если bin почему-то не был размечен заранее,
+        // заполняем layer/material из реального step.
+        if (bin.layerId < 0) {
+            bin.layerId = layerId;
+        }
 
         if (bin.layerName.empty()) {
             bin.layerName = std::move(layerName);
@@ -237,9 +270,6 @@ public:
         if (bin.materialName.empty()) {
             bin.materialName = std::move(materialName);
         }
-
-        bin.totalEnergyDeposit += energyDeposit;
-        bin.totalElectronHolePairs += electronHolePairs;
     }
 
     void RecordElectronEntryEnergy(double kineticEnergy) {
@@ -538,70 +568,81 @@ private:
     }
 
     void ExportDepthProfile(const std::string& filePath) const {
-        std::ofstream file(filePath);
+    std::ofstream file(filePath);
 
-        if (!file.is_open()) {
-            Geant4::G4Exception(
-                "SimulationStatisticsService",
-                "DepthProfileExportFailed",
-                Geant4::G4ExceptionSeverity::JustWarning,
-                ("Cannot open file: " + filePath).c_str()
-            );
+    if (!file.is_open()) {
+        Geant4::G4Exception(
+            "SimulationStatisticsService",
+            "DepthProfileExportFailed",
+            Geant4::G4ExceptionSeverity::JustWarning,
+            ("Cannot open file: " + filePath).c_str()
+        );
 
-            return;
-        }
-
-        file
-            << "depth_bin,"
-            << "depth_min_nm,"
-            << "depth_max_nm,"
-            << "depth_center_nm,"
-            << "layer_id,"
-            << "layer_name,"
-            << "material,"
-            << "step_count,"
-            << "energy_deposit_eV,"
-            << "energy_deposit_keV,"
-            << "electron_hole_pairs"
-            << "\n";
-
-        for (std::size_t i = 0; i < depthProfileBins.size(); ++i) {
-            const auto& bin = depthProfileBins[i];
-
-            WriteCsvInteger(file, static_cast<std::uint64_t>(i));
-            file << ",";
-
-            WriteCsvNumber(file, bin.depthMin / Geant4::nm);
-            file << ",";
-
-            WriteCsvNumber(file, bin.depthMax / Geant4::nm);
-            file << ",";
-
-            WriteCsvNumber(file, bin.depthCenter / Geant4::nm);
-            file << ",";
-
-            file << bin.layerId;
-            file << ",";
-
-            WriteCsvString(file, bin.layerName);
-            file << ",";
-
-            WriteCsvString(file, bin.materialName);
-            file << ",";
-
-            WriteCsvInteger(file, bin.stepCount);
-            file << ",";
-
-            WriteCsvNumber(file, bin.totalEnergyDeposit / Geant4::eV);
-            file << ",";
-
-            WriteCsvNumber(file, bin.totalEnergyDeposit / Geant4::keV);
-            file << ",";
-
-            WriteCsvNumber(file, bin.totalElectronHolePairs);
-            file << "\n";
-        }
+        return;
     }
+
+    file
+        << "depth_nm,"
+        << "layer_id,"
+        << "layer_name,"
+        << "material,"
+        << "step_count,"
+        << "energy_deposit_total_MeV,"
+        << "energy_deposit_MeV_per_event,"
+        << "electron_hole_pairs_total,"
+        << "electron_hole_pairs_per_event"
+        << "\n";
+
+    const auto events =
+        eventCount > 0
+            ? static_cast<double>(eventCount)
+            : 1.0;
+
+    for (const auto& bin : depthProfileBins) {
+        const auto depthNm =
+            bin.depthMin / Geant4::nm;
+
+        const auto energyTotalMeV =
+            bin.totalEnergyDeposit / Geant4::MeV;
+
+        const auto energyPerEventMeV =
+            energyTotalMeV / events;
+
+        const auto ehpTotal =
+            bin.totalElectronHolePairs;
+
+        const auto ehpPerEvent =
+            ehpTotal / events;
+
+        WriteCsvNumber(file, depthNm);
+        file << ",";
+
+        file << bin.layerId;
+        file << ",";
+
+        WriteCsvString(file, bin.layerName);
+        file << ",";
+
+        WriteCsvString(file, bin.materialName);
+        file << ",";
+
+        WriteCsvInteger(file, bin.stepCount);
+        file << ",";
+
+        WriteCsvNumber(file, energyTotalMeV);
+        file << ",";
+
+        WriteCsvNumber(file, energyPerEventMeV);
+        file << ",";
+
+        WriteCsvNumber(file, ehpTotal);
+        file << ",";
+
+        WriteCsvNumber(file, ehpPerEvent);
+
+        file << "\n";
+    }
+}
 
 #pragma endregion
 
@@ -626,6 +667,7 @@ private:
     double detectorThickness = 0.0;
     double depthBinWidth = 0.0;
 
+    std::vector<DepthLayerDescriptor> depthLayerDescriptors;
     std::vector<DepthProfileBin> depthProfileBins;
 
 #pragma endregion

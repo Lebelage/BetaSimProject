@@ -11,6 +11,7 @@ import BetaSimLib.Materials.ExtendedMaterialService;
 import BetaSimLib.Materials.MaterialConstants;
 import BetaSimLib.Layers.DetectorLayerBuilder;
 import BetaSimLib.SensitiveDetectors.BaseSD;
+import BetaSimLib.Statistics.SimulationStatisticsService;
 
 export namespace BetaSimLib::Detectors {
 
@@ -55,41 +56,45 @@ public:
         BetaSimLib::Materials::ExtendedMaterialService::Instance()
             .InitializeConfig(config.get());
 
-        auto* worldMaterial = ResolveWorldMaterial(config->worldMaterial);
+        auto* worldMaterial =
+            ResolveWorldMaterial(config->worldMaterial);
 
-        const auto worldSize = ResolveWorldSize(config->worldSize);
-        const auto halfWorldSize = worldSize / 2.0;
+        const auto worldSize =
+            ResolveWorldSize(config->worldSize);
 
-        auto* solidWorld = new Geant4::G4Box(
-            "World_Solid",
-            halfWorldSize,
-            halfWorldSize,
-            halfWorldSize
-        );
+        const auto halfWorldSize =
+            worldSize / 2.0;
 
-        auto* logicWorld = new Geant4::G4LogicalVolume(
-            solidWorld,
-            worldMaterial,
-            "World_Logic"
-        );
+        auto* solidWorld =
+            new Geant4::G4Box(
+                "World_Solid",
+                halfWorldSize,
+                halfWorldSize,
+                halfWorldSize
+            );
 
-        auto* physicalWorld = new Geant4::G4PVPlacement(
-            nullptr,
-            Geant4::G4ThreeVector(),
-            logicWorld,
-            "world",
-            nullptr,
-            false,
-            0,
-            true
-        );
+        auto* logicWorld =
+            new Geant4::G4LogicalVolume(
+                solidWorld,
+                worldMaterial,
+                "World_Logic"
+            );
 
-        // Source layer — только геометрия.
-        // На него НЕ вешаем SD и НЕ задаём маленький step limit.
+        auto* physicalWorld =
+            new Geant4::G4PVPlacement(
+                nullptr,
+                Geant4::G4ThreeVector(),
+                logicWorld,
+                "world",
+                nullptr,
+                false,
+                0,
+                true
+            );
+
         BetaSimLib::Layers::SourceLayerBuilder sourceBuilder;
         sourceBuilder.Build(config->sourceLayer, logicWorld);
 
-        // Detector layers — geometry + UserLimits + SensitiveDetector.
         BetaSimLib::Layers::DetectorLayerBuilder detectorBuilder;
 
         detectorLogicalVolumes =
@@ -110,7 +115,7 @@ public:
             << Geant4::endl;
 
         Geant4::cout()
-            << "[BaseDetectorConstruction] Detector max step = "
+            << "[BaseDetectorConstruction] Detector max step/bin = "
             << GetDetectorMaxStep() / Geant4::nm
             << " nm"
             << Geant4::endl;
@@ -119,10 +124,14 @@ public:
     }
 
     void ConstructSDandField() override {
-        auto* sdManager = Geant4::G4SDManager::GetSDMpointer();
+        auto* sdManager =
+            Geant4::G4SDManager::GetSDMpointer();
 
         auto* existingSD =
-            sdManager->FindSensitiveDetector("/BetaSim/DetectorSD", false);
+            sdManager->FindSensitiveDetector(
+                "/BetaSim/DetectorSD",
+                false
+            );
 
         auto* detectorSD =
             dynamic_cast<BetaSimLib::SensitiveDetectors::BaseSD*>(
@@ -138,16 +147,12 @@ public:
             sdManager->AddNewDetector(detectorSD);
         }
 
-        // Настройки для SD:
-        // detectorThickness — полная толщина всех detector layers.
-        // detectorMaxStep    — шаг по глубине / spatial step.
-        // max spectrum       — 100 keV.
-        // spectrum bin       — 0.1 keV.
         detectorSD->Configure(
             GetDetectorThickness(),
             GetDetectorMaxStep(),
             100.0 * Geant4::keV,
-            0.1 * Geant4::keV
+            0.1 * Geant4::keV,
+            BuildDepthLayerDescriptors()
         );
 
         for (auto* logicVolume : detectorLogicalVolumes) {
@@ -171,7 +176,8 @@ public:
 
 private:
     void ApplyDetectorUserLimits() const {
-        const auto maxStep = GetDetectorMaxStep();
+        const auto maxStep =
+            GetDetectorMaxStep();
 
         if (maxStep <= 0.0) {
             return;
@@ -203,16 +209,42 @@ private:
     }
 
     double GetDetectorMaxStep() const {
-        // ВАЖНО:
         // MaterialsConstants::MAX_STEP_LIMIT считаем числом в nm.
-        //
         // Например:
-        // MAX_STEP_LIMIT = 1.0   -> 1 nm
-        // MAX_STEP_LIMIT = 10.0  -> 10 nm
-        // MAX_STEP_LIMIT = 100.0 -> 100 nm
-
+        // 1.0 -> 1 nm
+        // 10.0 -> 10 nm
         return BetaSimLib::Materials::MaterialsConstants::MAX_STEP_LIMIT
             * Geant4::nm;
+    }
+
+    std::vector<BetaSimLib::Statistics::DepthLayerDescriptor>
+    BuildDepthLayerDescriptors() const {
+        std::vector<BetaSimLib::Statistics::DepthLayerDescriptor> result;
+
+        if (!config) {
+            return result;
+        }
+
+        double currentDepth = 0.0;
+        int layerId = 0;
+
+        for (const auto& layer : config->detector.layers) {
+            BetaSimLib::Statistics::DepthLayerDescriptor descriptor;
+
+            descriptor.layerId = layerId;
+            descriptor.layerName =
+                "DetLayer_Phys_" + std::to_string(layerId);
+            descriptor.materialName = layer.material;
+            descriptor.depthStart = currentDepth;
+            descriptor.depthEnd = currentDepth + layer.thickness;
+
+            result.push_back(std::move(descriptor));
+
+            currentDepth += layer.thickness;
+            ++layerId;
+        }
+
+        return result;
     }
 
 #pragma endregion
@@ -240,7 +272,8 @@ private:
                     .Get(materialName);
 
             if (optExtMat.has_value() && optExtMat.value() != nullptr) {
-                auto* material = optExtMat.value()->GetG4Material();
+                auto* material =
+                    optExtMat.value()->GetG4Material();
 
                 if (material) {
                     return material;
@@ -279,8 +312,6 @@ private:
 private:
     std::shared_ptr<const BetaSimLib::Models::BaseExperimentConfig> config;
 
-    // Только detector layers.
-    // Source layer сюда не попадает.
     std::vector<Geant4::G4LogicalVolume*> detectorLogicalVolumes;
 
 #pragma endregion
