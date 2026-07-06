@@ -1,5 +1,5 @@
 module;
-#include <expected>
+#include <format>
 export module BetaSimLib.Runner;
 
 import std;
@@ -16,8 +16,10 @@ import BetaSimLib.Actions.RunAction;
 import BetaSimLib.Generators.GeneratorManager;
 import BetaSimLib.Runtime.ExperimentState;
 
-export namespace BetaSimLib::Runner {
+import BetaSimLib.Models.Stats.SimulationStatsInfo;
 
+export namespace BetaSimLib::Runner {
+using namespace BetaSimLib::Models::Stats;
 class UserActionInitialization final
     : public Geant4::G4VUserActionInitialization {
 public:
@@ -90,6 +92,17 @@ private:
 
 public:
   void Initialize(int argc, char **argv) {
+        using Traits = ModelTraits<DepthProfileModel>;
+
+   const auto fields = Traits::fields;
+
+
+
+       std::println("type: {}, name: {}, offset: {}", 
+                    fields[4].type, 
+                    fields[4].name, 
+                    fields[4].offset);
+
     InitializeRunManager(argc, argv);
     SubscribeEvents();
   }
@@ -113,6 +126,8 @@ public:
     // Не вызывай здесь /vis/drawVolume, /vis/scene/add/volume,
     // /tracking/storeTrajectory 1 или /run/beamOn.
     uiManager->ApplyCommand("/control/execute init.mac");
+
+    
 
     ui->SessionStart();
   }
