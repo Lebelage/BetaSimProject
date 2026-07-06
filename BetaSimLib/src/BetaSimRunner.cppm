@@ -92,16 +92,12 @@ private:
 
 public:
   void Initialize(int argc, char **argv) {
-        using Traits = ModelTraits<DepthProfileModel>;
+    using Traits = ModelTraits<DepthProfileModel>;
 
-   const auto fields = Traits::fields;
+    const auto fields = Traits::fields;
 
-
-
-       std::println("type: {}, name: {}, offset: {}", 
-                    fields[4].type, 
-                    fields[4].name, 
-                    fields[4].offset);
+    std::println("type: {}, name: {}, offset: {}", fields[1].type,
+                 fields[2].name, fields[2].offset);
 
     InitializeRunManager(argc, argv);
     SubscribeEvents();
@@ -126,8 +122,6 @@ public:
     // Не вызывай здесь /vis/drawVolume, /vis/scene/add/volume,
     // /tracking/storeTrajectory 1 или /run/beamOn.
     uiManager->ApplyCommand("/control/execute init.mac");
-
-    
 
     ui->SessionStart();
   }
