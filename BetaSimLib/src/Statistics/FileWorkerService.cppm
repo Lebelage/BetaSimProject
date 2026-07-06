@@ -1,5 +1,3 @@
-module;
-#include <expected>
 export module BetaSimLib.Statistics.FileWorkerService;
 import std;
 import BetaSimLib.Concepts.FileWorkers.FileWorkerConcept;

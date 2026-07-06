@@ -2,6 +2,12 @@
   "name": "betasimlib",
   "version": "1.0.0",
   "dependencies": [
-    "nlohmann-json"
+    "nlohmann-json",
+    {
+      "name": "arrow",
+      "features": [
+        "parquet"
+      ]
+    }
   ]
 }

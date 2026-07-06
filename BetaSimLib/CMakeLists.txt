@@ -38,11 +38,16 @@ target_sources(BetaSimLib
 )
 
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(Arrow REQUIRED)
+find_package(Parquet REQUIRED)
 
+# ИСПРАВЛЕНО: используем правильные импортированные таргеты вместо строк
 target_link_libraries(BetaSimLib 
     PUBLIC 
         ${Geant4_LIBRARIES}
         nlohmann_json::nlohmann_json
+        arrow_static
+        parquet_static
 )
 
 target_include_directories(BetaSimLib PUBLIC ${Geant4_INCLUDE_DIRS})

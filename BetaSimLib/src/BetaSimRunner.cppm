@@ -1,3 +1,5 @@
+module;
+#include <expected>
 export module BetaSimLib.Runner;
 
 import std;
